@@ -25,7 +25,7 @@ pub enum Days {
     SAT,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Month {
     JAN,
     FEB,
@@ -74,7 +74,7 @@ pub struct Schedule {
     recurring: Recurring,
     year: Option<u16>,
     day: Option<u8>,
-    month: Option<u8>,
+    month: Option<Month>,
     hour: Option<u8>,
     minute: Option<u8>,
     repeat: Option<Until>,
@@ -110,8 +110,8 @@ impl Schedule {
     pub fn day(mut self, d: u8) -> Self {
         if d >= 1 && d <= 31 {
             if let Some(m) = self.month {
-                if !is_valid_day_for_month(m, d) {
-                    eprintln!("Invalid day {} for month {}.", d, m);
+                if !is_valid_day_for_month(m as u8, d) {
+                    eprintln!("Invalid day {} for month {:?}.", d, m);
                     return self;
                 }
             }
@@ -126,22 +126,18 @@ impl Schedule {
         self
     }
 
-    pub fn month(mut self, m: u8) -> Self {
-        if m >= 1 && m <= 12 {
+    pub fn month(mut self, m: Month) -> Self {
             if let Some(d) = self.day {
-                if !is_valid_day_for_month(m, d) {
-                    eprintln!("Invalid day {} for month {}.", d, m);
+                if !is_valid_day_for_month(m as u8, d) {
+                    eprintln!("Invalid day {} for month {:?}.", d, m);
                     return self;
                 }
             }
             if self.month.is_none() {
                 self.month = Some(m);
             } else {
-                eprintln!("Month is already set. Ignoring {}", m);
+                eprintln!("Month is already set. Ignoring {:?}", m);
             }
-        } else {
-            eprintln!("Invalid month: {}. Must be 1–12.", m);
-        }
         self
     }
 
@@ -267,14 +263,8 @@ mod tests {
 
     #[test]
     fn month_set() {
-        let s = Schedule::new().month(5);
-        assert_eq!(s.month, Some(5));
-    }
-
-    #[test]
-    fn month_not_set() {
-        let s = Schedule::new().month(13);
-        assert_eq!(s.month, None);
+        let s = Schedule::new().month(Month::MAR);
+        assert_eq!(s.month, Some(Month::MAR));
     }
 
     #[test]

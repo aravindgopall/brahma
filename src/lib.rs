@@ -7,5 +7,6 @@
 // - Repetition: 10 times, until 3rd of March etc.
 #![allow(dead_code)]
 
+pub mod builder;
 mod time;
 pub mod types;
