@@ -1,12 +1,12 @@
 use crate::time::is_valid_day_for_month;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum FrequencyPattern {
     Frequency(Frequency),
     ByDay((Option<u8>, Days)),
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Frequency {
     Hourly,
     Daily,
@@ -25,7 +25,7 @@ pub enum Days {
     SAT,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Month {
     JAN,
     FEB,
@@ -41,9 +41,10 @@ pub enum Month {
     DEC,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Except {
     Day(Days),
+    N(u8),
     NDay((u8, Days)),
     MONTH(Month),
 }
@@ -74,7 +75,7 @@ pub struct Schedule {
     recurring: Recurring,
     year: Option<u16>,
     day: Option<u8>,
-    month: Option<u8>,
+    month: Option<Month>,
     hour: Option<u8>,
     minute: Option<u8>,
     repeat: Option<Until>,
@@ -110,8 +111,8 @@ impl Schedule {
     pub fn day(mut self, d: u8) -> Self {
         if d >= 1 && d <= 31 {
             if let Some(m) = self.month {
-                if !is_valid_day_for_month(m, d) {
-                    eprintln!("Invalid day {} for month {}.", d, m);
+                if !is_valid_day_for_month(m as u8, d) {
+                    eprintln!("Invalid day {} for month {:?}.", d, m);
                     return self;
                 }
             }
@@ -126,21 +127,17 @@ impl Schedule {
         self
     }
 
-    pub fn month(mut self, m: u8) -> Self {
-        if m >= 1 && m <= 12 {
-            if let Some(d) = self.day {
-                if !is_valid_day_for_month(m, d) {
-                    eprintln!("Invalid day {} for month {}.", d, m);
-                    return self;
-                }
+    pub fn month(mut self, m: Month) -> Self {
+        if let Some(d) = self.day {
+            if !is_valid_day_for_month(m as u8, d) {
+                eprintln!("Invalid day {} for month {:?}.", d, m);
+                return self;
             }
-            if self.month.is_none() {
-                self.month = Some(m);
-            } else {
-                eprintln!("Month is already set. Ignoring {}", m);
-            }
+        }
+        if self.month.is_none() {
+            self.month = Some(m);
         } else {
-            eprintln!("Invalid month: {}. Must be 1–12.", m);
+            eprintln!("Month is already set. Ignoring {:?}", m);
         }
         self
     }
@@ -267,14 +264,8 @@ mod tests {
 
     #[test]
     fn month_set() {
-        let s = Schedule::new().month(5);
-        assert_eq!(s.month, Some(5));
-    }
-
-    #[test]
-    fn month_not_set() {
-        let s = Schedule::new().month(13);
-        assert_eq!(s.month, None);
+        let s = Schedule::new().month(Month::APR);
+        assert_eq!(s.month, Some(Month::APR));
     }
 
     #[test]
@@ -444,5 +435,114 @@ mod tests {
                 }
             ))
         );
+    }
+}
+
+#[cfg(test)]
+mod integration_tests {
+    use super::*;
+
+    // - Specific dates/times, eg: 20 Sept 10:00 pm.
+    #[test]
+    fn basic_scheduler() {
+        let schedule = Schedule::new()
+                    .month(Month::SEPT)
+                    .day(20)
+                    .hour(22);
+
+        assert_eq!(schedule.day, Some(20));
+        assert_eq!(schedule.hour, Some(22));
+        assert_eq!(schedule.month, Some(Month::SEPT));
+    }
+
+    // - Recurring intervals, eg: hourly, daily, weekly, monthly, every third Saturday
+    #[test]
+    fn recurring_schedule_daily() {
+        let s = Schedule::new()
+              .every(FrequencyPattern::Frequency(Frequency::Daily));
+
+        assert_eq!(
+            s.recurring.frequency.unwrap(),
+            FrequencyPattern::Frequency(Frequency::Daily)
+        );
+    }
+
+    #[test]
+    fn recurring_schedule_monthly() {
+        let s = Schedule::new()
+              .every(FrequencyPattern::Frequency(Frequency::Monthly));
+
+        assert_eq!(
+            s.recurring.frequency.unwrap(),
+            FrequencyPattern::Frequency(Frequency::Monthly)
+        );
+    }
+
+    // - Recurring intervals, eg: every third Saturday
+    #[test]
+    fn recurring_schedule_every_third_sat() {
+        let s = Schedule::new()
+              .every(FrequencyPattern::ByDay((Some(3), Days::SAT)));
+
+        assert_eq!(
+            s.recurring.frequency.unwrap(),
+            FrequencyPattern::ByDay((Some(3), Days::SAT))
+        );
+    }
+
+    // above test but for all saturday.
+    #[test]
+    fn recurring_schedule_every_sat() {
+        let s = Schedule::new()
+              .every(FrequencyPattern::ByDay((None, Days::SAT)));
+
+        assert_eq!(
+            s.recurring.frequency.unwrap(),
+            FrequencyPattern::ByDay((None, Days::SAT))
+        );
+    }
+
+    // all saturday except the 3rd one.
+    #[test]
+    fn recurring_schedule_every_sat_except() {
+        let s = Schedule::new()
+            .every(FrequencyPattern::ByDay((None, Days::SAT)))
+            .except(Except::N(3));
+
+        assert_eq!(
+            s.recurring.frequency.unwrap(),
+            FrequencyPattern::ByDay((None, Days::SAT))
+        );
+        assert_eq!(s.recurring.except.unwrap(), Except::N(3));
+    }
+
+    // - Random intervals, eg: between 9-10 am
+    #[test]
+    fn schedule_between() {
+        let s = Schedule::new()
+              .between((9, 0), (10, 0));
+        assert_eq!(
+            s.range,
+            Some((
+                Time { hour: 9, minute: 0 },
+                Time {
+                    hour: 10,
+                    minute: 0
+                }
+            ))
+        );
+    }
+
+    // - Repetition: 10 times, until 3rd of March etc.
+    #[test]
+    fn until_sets_day_month() {
+        let s = Schedule::new()
+            .repeat(10)
+            .until(Some(3), Some(Month::MAR), None, None); // create until_day_and_month, ...?
+
+        let repeat = s.repeat.unwrap();
+        assert_eq!(repeat.total, 10);
+        assert_eq!(repeat.day, Some(3));
+        assert_eq!(repeat.month, Some(Month::MAR));
     }
 }
