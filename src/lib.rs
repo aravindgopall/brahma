@@ -8,4 +8,4 @@
 #![allow(dead_code)]
 
 mod time;
-mod types;
+pub mod types;
