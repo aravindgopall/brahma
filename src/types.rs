@@ -61,6 +61,15 @@ pub struct Recurring {
 }
 
 #[derive(Debug)]
+pub struct Until {
+    total: u8,
+    day: Option<u8>,
+    month: Option<Month>,
+    hr: Option<u8>,
+    minute: Option<u8>,
+}
+
+#[derive(Debug)]
 pub struct Schedule {
     recurring: Recurring,
     year: Option<u16>,
@@ -68,7 +77,7 @@ pub struct Schedule {
     month: Option<u8>,
     hour: Option<u8>,
     minute: Option<u8>,
-    total: Option<u8>,
+    repeat: Option<Until>,
     range: Option<(Time, Time)>,
 }
 
@@ -84,7 +93,7 @@ impl Schedule {
             month: None,
             hour: None,
             minute: None,
-            total: None,
+            repeat: None,
             range: None,
         }
     }
@@ -181,10 +190,37 @@ impl Schedule {
     }
 
     pub fn repeat(mut self, n: u8) -> Self {
-        if self.total.is_none() {
-            self.total = Some(n);
+        if self.repeat.is_none() {
+            self.repeat = Some(Until {
+                total: n,
+                day: None,
+                month: None,
+                hr: None,
+                minute: None,
+            });
         } else {
             eprintln!("Repeat count already set. Ignoring {}", n);
+        }
+        self
+    }
+
+    pub fn until(
+        mut self,
+        d: Option<u8>,
+        m: Option<Month>,
+        h: Option<u8>,
+        min: Option<u8>,
+    ) -> Self {
+        if self.repeat.is_none() {
+            eprintln!("repeat should be invoked before until, ignoring this");
+        } else {
+            self.repeat = Some(Until {
+                total: self.repeat.unwrap().total,
+                day: d,
+                month: m,
+                hr: h,
+                minute: min,
+            })
         }
         self
     }
@@ -347,13 +383,35 @@ mod tests {
     #[test]
     fn repeat_set() {
         let s = Schedule::new().repeat(10);
-        assert_eq!(s.total, Some(10));
+        assert_eq!(s.repeat.unwrap().total, 10);
     }
 
     #[test]
     fn repeat_ignored_on_second_call() {
         let s = Schedule::new().repeat(10).repeat(20);
-        assert_eq!(s.total, Some(10));
+        assert_eq!(s.repeat.unwrap().total, 10);
+    }
+
+    #[test]
+    fn until_sets_day_month_hour_minute() {
+        let s = Schedule::new()
+            .repeat(5)
+            .until(Some(3), Some(Month::MAR), Some(10), Some(30));
+
+        let repeat = s.repeat.unwrap();
+        assert_eq!(repeat.total, 5);
+        assert_eq!(repeat.day, Some(3));
+        assert_eq!(repeat.month, Some(Month::MAR));
+        assert_eq!(repeat.hr, Some(10));
+        assert_eq!(repeat.minute, Some(30));
+    }
+
+    #[test]
+    fn until_without_repeat_is_ignored() {
+        let s = Schedule::new().until(Some(5), Some(Month::JAN), Some(8), Some(45));
+
+        // until should not be set because repeat was not set
+        assert!(s.repeat.is_none());
     }
 
     #[test]
