@@ -29,21 +29,19 @@ use brahma::{Schedule, Frequency, FrequencyPattern, Days, Month, Except};
 
 // Example: Monthly Schedule on 20th at 10:30 PM
 let schedule1 = Schedule::new()
-    .day(20)
-    .hour(22)
-    .minute(30)
-    .every(FrequencyPattern::Frequency(Frequency::Monthly));
+    .day_with_time(20, 22, 30)
+    .monthly();
 
 // Example: Every 3rd Saturday Until March 3rd at 10:00
 let schedule2 = Schedule::new()
-    .every(FrequencyPattern::ByDay((Some(3), Days::SAT)))
-    .until(Some(3), Some(Month::MAR), Some(10), Some(0));
+    .every_nth_day(3, Days::SAT)
+    .until_date(3, 3); // 3 March
 
 // Example: Exclude Specific Days or Months
 let schedule3 = Schedule::new()
-    .every(FrequencyPattern::Frequency(Frequency::Weekly))
-    .except(Except::NDay((2, Days::FRI)))
-    .except(Except::MONTH(Month::JAN));
+    .weekly()
+    .except_on_nthday(2, Days::FRI)
+    .except_on_month(Month::JAN);
 
 // Example: Time Window
 let schedule4 = Schedule::new().between((9, 0), (10, 0));
